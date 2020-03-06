@@ -316,7 +316,7 @@ class ReadView {
   typedef UT_LIST_NODE_T(ReadView) node_t;
 
   /** List of read views in trx_sys */
-  byte pad1[64 - sizeof(node_t)];
+  byte pad1[INNOBASE_CACHE_LINE_SIZE - sizeof(node_t)];
   node_t m_view_list;
 };
 

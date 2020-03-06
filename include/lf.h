@@ -87,8 +87,10 @@ struct LF_PINS {
   uint32 purgatory_count;
   std::atomic<uint32> link;
   /* we want sizeof(LF_PINS) to be 64 to avoid false sharing */
-#if SIZEOF_INT * 2 + SIZEOF_CHARP * (LF_PINBOX_PINS + 2) != 64
-  char pad[64 - sizeof(uint32) * 2 - sizeof(void *) * (LF_PINBOX_PINS + 2)];
+#if SIZEOF_INT * 2 + SIZEOF_CHARP * (LF_PINBOX_PINS + 2) != \
+    CPU_CACHE_LINESIZE_PADDING
+  char pad[CPU_CACHE_LINESIZE_PADDING - sizeof(uint32) * 2 -
+           sizeof(void *) * (LF_PINBOX_PINS + 2)];
 #endif
 };
 

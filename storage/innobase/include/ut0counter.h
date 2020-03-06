@@ -49,7 +49,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #ifdef __powerpc__
 #define INNOBASE_CACHE_LINE_SIZE 128
 #else
-#define INNOBASE_CACHE_LINE_SIZE 64
+#define INNOBASE_CACHE_LINE_SIZE CPU_CACHE_LINESIZE_PADDING
 #endif /* __powerpc__ */
 
 /** Default number of slots to use in ib_counter_t */
