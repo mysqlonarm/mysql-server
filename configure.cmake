@@ -770,3 +770,59 @@ IF(HAVE_LIBNUMA AND NOT WITH_NUMA)
    SET(HAVE_LIBNUMA 0)
    MESSAGE(STATUS "Disabling NUMA on user's request")
 ENDIF()
+
+# check for intrinsic crc32 support on arm
+IF(LINUX)
+  IF (CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64|AARCH64")
+    CHECK_INCLUDE_FILES(arm_acle.h HAVE_ACLE_H)
+
+    IF (HAVE_ACLE_H)
+
+      # CRC implementation is optional for ARMv8-A (alias to AARCH64)
+      # but mandatory for ARMv8.1A onwards.
+      # ideally if there is no march provided compiler should use
+      # native machine setting but compiler doesn't.
+      # This means even if the compiling machine is based on ARMv8.1
+      # compiler fail to expose crc32 unless target architecture is set.
+
+      # hopefully this bug will fix in compiler in due-course
+      # but till then we check if compiler w/o target architecture exposes
+      # crc32 if no then as fallback try to use target architecture.
+
+      CHECK_CXX_SOURCE_COMPILES(
+      "
+      #include <arm_acle.h>
+      int main() {
+        __crc32cb(0, 0); __crc32ch(0, 0); __crc32cw(0, 0); __crc32cd(0, 0);
+        __crc32b(0, 0); __crc32h(0, 0); __crc32w(0, 0); __crc32d(0, 0);
+        return 0;
+      }"
+      HAVE_ARMV8_CRC32)
+
+      IF (NOT HAVE_ARMV8_CRC32)
+        set(OLD_CMAKE_REQURED_FLAGS ${CMAKE_REQUIRED_FLAGS})
+        set(CMAKE_REQUIRED_FLAGS "-march=armv8-a+crc")
+        CHECK_CXX_SOURCE_COMPILES(
+        "
+        #include <arm_acle.h>
+        int main() {
+          __crc32cb(0, 0); __crc32ch(0, 0); __crc32cw(0, 0); __crc32cd(0, 0);
+          __crc32b(0, 0); __crc32h(0, 0); __crc32w(0, 0); __crc32d(0, 0);
+          return 0;
+        }"
+        HAVE_ARMV8_CRC32_WITH_ARCH_EXTN)
+        set(CMAKE_REQUIRED_FLAGS ${OLD_CMAKE_REQURED_FLAGS})
+        if (HAVE_ARMV8_CRC32_WITH_ARCH_EXTN)
+          STRING_APPEND(CMAKE_CXX_FLAGS " -march=armv8-a+crc")
+        ENDIF()
+      ENDIF()
+
+      IF (HAVE_ARMV8_CRC32 OR HAVE_ARMV8_CRC32_WITH_ARCH_EXTN)
+        MESSAGE(STATUS "ARMv8 crc32 intrinsic support available")
+        SET(HAVE_ARMV8_CRC32_INTRINSIC 1)
+      ENDIF()
+
+    ENDIF() # arm_acle.h
+  ENDIF() # aarch64
+ENDIF() # linux
+

@@ -361,4 +361,7 @@
 
 #define SO_EXT "@CMAKE_SHARED_MODULE_SUFFIX@"
 
+/* ARM crc32 support */
+#cmakedefine HAVE_ARMV8_CRC32_INTRINSIC @HAVE_ARMV8_CRC32_INTRINSIC@
+
 #endif
