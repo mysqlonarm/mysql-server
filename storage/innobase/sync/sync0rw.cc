@@ -310,7 +310,7 @@ void rw_lock_s_lock_spin(
     const char *file_name, /*!< in: file name where lock requested */
     ulint line)            /*!< in: line where requested */
 {
-  ulint i = 0; /* spin round count */
+  ulint i = 0, j; /* spin round count */
   sync_array_t *sync_arr;
   ulint spin_count = 0;
   uint64_t count_os_wait = 0;
@@ -325,6 +325,7 @@ lock_loop:
 
   /* Spin waiting for the writer field to become free */
   os_rmb;
+  j = i;
   while (i < srv_n_spin_wait_rounds && lock->lock_word <= 0) {
     if (srv_spin_wait_delay) {
       ut_delay(ut_rnd_interval(0, srv_spin_wait_delay));
@@ -337,7 +338,8 @@ lock_loop:
     os_thread_yield();
   }
 
-  ++spin_count;
+  /* what we need is current spin loop rounds only */
+  spin_count += (i - j);
 
   /* We try once again to obtain the lock */
   if (rw_lock_s_lock_low(lock, pass, file_name, line)) {
@@ -658,7 +660,7 @@ void rw_lock_x_lock_func(
     const char *file_name, /*!< in: file name where lock requested */
     ulint line)            /*!< in: line where requested */
 {
-  ulint i = 0;
+  ulint i = 0, j;
   sync_array_t *sync_arr;
   ulint spin_count = 0;
   uint64_t count_os_wait = 0;
@@ -688,6 +690,7 @@ lock_loop:
 
     /* Spin waiting for the lock_word to become free */
     os_rmb;
+    j = i;
     while (i < srv_n_spin_wait_rounds && lock->lock_word <= X_LOCK_HALF_DECR) {
       if (srv_spin_wait_delay) {
         ut_delay(ut_rnd_interval(0, srv_spin_wait_delay));
@@ -696,7 +699,8 @@ lock_loop:
       i++;
     }
 
-    spin_count += i;
+    /* what we need is current spin loop rounds only */
+    spin_count += (i - j);
 
     if (i >= srv_n_spin_wait_rounds) {
       os_thread_yield();
@@ -754,11 +758,11 @@ void rw_lock_sx_lock_func(
     ulint line)            /*!< in: line where requested */
 
 {
-  ulint i = 0;
+  ulint i = 0, j;
   sync_array_t *sync_arr;
   ulint spin_count = 0;
   uint64_t count_os_wait = 0;
-  ulint spin_wait_count = 0;
+  bool spinning = false;
 
   ut_ad(rw_lock_validate(lock));
   ut_ad(!rw_lock_own(lock, RW_LOCK_S));
@@ -772,16 +776,19 @@ lock_loop:
     }
 
     rw_lock_stats.rw_sx_spin_round_count.add(spin_count);
-    rw_lock_stats.rw_sx_spin_wait_count.add(spin_wait_count);
 
     /* Locking succeeded */
     return;
 
   } else {
-    ++spin_wait_count;
+    if (!spinning) {
+      spinning = true;
+      rw_lock_stats.rw_sx_spin_wait_count.inc();
+    }
 
     /* Spin waiting for the lock_word to become free */
     os_rmb;
+    j = i;
     while (i < srv_n_spin_wait_rounds && lock->lock_word <= X_LOCK_HALF_DECR) {
       if (srv_spin_wait_delay) {
         ut_delay(ut_rnd_interval(0, srv_spin_wait_delay));
@@ -790,7 +797,7 @@ lock_loop:
       i++;
     }
 
-    spin_count += i;
+    spin_count += (i - j);
 
     if (i >= srv_n_spin_wait_rounds) {
       os_thread_yield();
@@ -818,7 +825,6 @@ lock_loop:
     }
 
     rw_lock_stats.rw_sx_spin_round_count.add(spin_count);
-    rw_lock_stats.rw_sx_spin_wait_count.add(spin_wait_count);
 
     /* Locking succeeded */
     return;
