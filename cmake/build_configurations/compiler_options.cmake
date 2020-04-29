@@ -44,7 +44,13 @@ IF(UNIX)
 
   # Default GCC flags
   IF(MY_COMPILER_IS_GNU)
-    SET(COMMON_C_FLAGS               "-fno-omit-frame-pointer")
+
+    IF(CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64|AARCH64")
+      SET(COMMON_C_FLAGS "-fno-omit-frame-pointer -march=armv8-a+crypto+crc")
+    ELSE()
+      SET(COMMON_C_FLAGS "-fno-omit-frame-pointer")
+    ENDIF()
+
     # Disable inline optimizations for valgrind testing to avoid false positives
     IF(WITH_VALGRIND)
       STRING_PREPEND(COMMON_C_FLAGS  "-fno-inline ")
@@ -54,8 +60,14 @@ IF(UNIX)
       STRING_APPEND(COMMON_C_FLAGS   " -ffp-contract=off")
     ENDIF()
 
-    SET(COMMON_CXX_FLAGS             "-std=c++14 -fno-omit-frame-pointer")
-    # Disable inline optimizations for valgrind testing to avoid false positives
+    IF(CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64|AARCH64")
+      SET(COMMON_CXX_FLAGS
+          "-std=c++14 -fno-omit-frame-pointer -march=armv8-a+crypto+crc")
+    ELSE()
+      SET(COMMON_CXX_FLAGS "-std=c++14 -fno-omit-frame-pointer")
+    ENDIF()
+
+    #Disable inline optimizations for valgrind testing to avoid false positives
     IF(WITH_VALGRIND)
       STRING_PREPEND(COMMON_CXX_FLAGS  "-fno-inline ")
     ENDIF()

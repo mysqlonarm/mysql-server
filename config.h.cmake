@@ -337,4 +337,7 @@
 
 #define SO_EXT "@CMAKE_SHARED_MODULE_SUFFIX@"
 
+/* Support ARMv8 CRC instructions */
+#cmakedefine ENABLE_ARMV8_CRC32
+
 #endif
