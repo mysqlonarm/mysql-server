@@ -79,20 +79,24 @@ class os_once {
   @param[in,out]	state		control variable
   @param[in]	do_func		function to call
   @param[in,out]	do_func_arg	an argument to pass to do_func(). */
-  static void do_or_wait_for_done(volatile state_t *state,
+  static void do_or_wait_for_done(std::atomic<state_t> *state,
                                   void (*do_func)(void *), void *do_func_arg) {
     /* Avoid calling os_compare_and_swap_uint32() in the most
     common case. */
-    if (*state == DONE) {
+    if (state->load(std::memory_order_relaxed) == DONE) {
       return;
     }
 
-    if (os_compare_and_swap_uint32(state, NEVER_DONE, IN_PROGRESS)) {
+    state_t expected = NEVER_DONE;
+    if (state->compare_exchange_strong(expected, IN_PROGRESS,
+                                       std::memory_order_acquire)) {
       /* We are the first. Call the function. */
 
       do_func(do_func_arg);
 
-      const bool swapped = os_compare_and_swap_uint32(state, IN_PROGRESS, DONE);
+      expected = IN_PROGRESS;
+      const bool swapped = state->compare_exchange_strong(
+          expected, DONE, std::memory_order_release);
 
       ut_a(swapped);
     } else {
@@ -101,7 +105,7 @@ class os_once {
       now or DONE (it has already been called and completed).
       Wait for it to become DONE. */
       for (;;) {
-        const state_t s = *state;
+        const state_t s = state->load(std::memory_order_relaxed);
 
         switch (s) {
           case DONE:

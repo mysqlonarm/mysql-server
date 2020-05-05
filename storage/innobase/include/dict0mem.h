@@ -780,7 +780,7 @@ struct zip_pad_info_t {
   ulint n_rounds;  /*!< number of currently successful
                   rounds */
 #ifndef UNIV_HOTBACKUP
-  volatile os_once::state_t mutex_created;
+  std::atomic<os_once::state_t> mutex_created;
   /*!< Creation state of mutex member */
 #endif /* !UNIV_HOTBACKUP */
 };
@@ -1549,7 +1549,7 @@ struct dict_table_t {
   ib_mutex_t *mutex;
 
   /** Creation state of mutex. */
-  volatile os_once::state_t mutex_created;
+  std::atomic<os_once::state_t> mutex_created;
 #endif /* !UNIV_HOTBACKUP */
 
   /** Id of the table. */
@@ -1774,7 +1774,7 @@ struct dict_table_t {
   /** Statistics for query optimization. @{ */
 
   /** Creation state of 'stats_latch'. */
-  volatile os_once::state_t stats_latch_created;
+  std::atomic<os_once::state_t> stats_latch_created;
 
   /** This latch protects:
   "dict_table_t::stat_initialized",
@@ -1898,7 +1898,7 @@ detect this and will eventually quit sooner. */
   lock_t *autoinc_lock;
 
   /** Creation state of autoinc_mutex member */
-  volatile os_once::state_t autoinc_mutex_created;
+  std::atomic<os_once::state_t> autoinc_mutex_created;
 #endif /* !UNIV_HOTBACKUP */
 
   /** Mutex protecting the autoincrement counter. */
@@ -2481,7 +2481,7 @@ or from a thread that has not shared the table object with other threads.
 @param[in,out]	table	table whose mutex is to be created */
 inline void dict_table_mutex_create_lazy(dict_table_t *table) {
   table->mutex = nullptr;
-  table->mutex_created = os_once::NEVER_DONE;
+  table->mutex_created.store(os_once::NEVER_DONE, std::memory_order_relaxed);
 }
 
 /** Destroy the mutex of a given table.
@@ -2489,7 +2489,7 @@ This function is only called from either single threaded environment
 or from a thread that has not shared the table object with other threads.
 @param[in,out]	table	table whose mutex is to be created */
 inline void dict_table_mutex_destroy(dict_table_t *table) {
-  if (table->mutex_created == os_once::DONE) {
+  if (table->mutex_created.load(std::memory_order_relaxed) == os_once::DONE) {
     if (table->mutex != nullptr) {
       mutex_free(table->mutex);
       UT_DELETE(table->mutex);
@@ -2502,7 +2502,7 @@ This function is only called from either single threaded environment
 or from a thread that has not shared the table object with other threads.
 @param[in,out]	table	table whose stats latch to destroy */
 inline void dict_table_autoinc_destroy(dict_table_t *table) {
-  if (table->autoinc_mutex_created == os_once::DONE) {
+  if (table->autoinc_mutex_created.load(std::memory_order_relaxed) == os_once::DONE) {
     if (table->autoinc_mutex != nullptr) {
       mutex_free(table->autoinc_mutex);
       UT_DELETE(table->autoinc_mutex);
@@ -2522,7 +2522,8 @@ or from a thread that has not shared the table object with other threads.
 inline void dict_table_autoinc_create_lazy(dict_table_t *table) {
   table->autoinc_mutex = nullptr;
   table->autoinc_persisted_mutex = nullptr;
-  table->autoinc_mutex_created = os_once::NEVER_DONE;
+  table->autoinc_mutex_created.store(os_once::NEVER_DONE,
+                                     std::memory_order_relaxed);
 }
 
 /** Request a lazy creation of dict_index_t::zip_pad::mutex.
@@ -2531,7 +2532,7 @@ or from a thread that has not shared the table object with other threads.
 @param[in,out]	index	index whose zip_pad mutex is to be created */
 inline void dict_index_zip_pad_mutex_create_lazy(dict_index_t *index) {
   index->zip_pad.mutex = nullptr;
-  index->zip_pad.mutex_created = os_once::NEVER_DONE;
+  index->zip_pad.mutex_created.store(os_once::NEVER_DONE, std::memory_order_relaxed);
 }
 
 /** Destroy the zip_pad_mutex of the given index.
@@ -2539,7 +2540,8 @@ This function is only called from either single threaded environment
 or from a thread that has not shared the table object with other threads.
 @param[in,out]	index	index whose stats latch to destroy */
 inline void dict_index_zip_pad_mutex_destroy(dict_index_t *index) {
-  if (index->zip_pad.mutex_created == os_once::DONE &&
+  if (index->zip_pad.mutex_created.load(std::memory_order_relaxed) ==
+          os_once::DONE &&
       index->zip_pad.mutex != nullptr) {
     mutex_free(index->zip_pad.mutex);
     UT_DELETE(index->zip_pad.mutex);

@@ -340,13 +340,14 @@ and dict_table_stats_lock()/unlock() become noop on this table. */
 void dict_table_stats_latch_create(dict_table_t *table, bool enabled) {
   if (!enabled) {
     table->stats_latch = nullptr;
-    table->stats_latch_created = os_once::DONE;
+    table->stats_latch_created.store(os_once::DONE, std::memory_order_relaxed);
     return;
   }
 
   /* We create this lazily the first time it is used. */
   table->stats_latch = nullptr;
-  table->stats_latch_created = os_once::NEVER_DONE;
+  table->stats_latch_created.store(os_once::NEVER_DONE,
+                                   std::memory_order_relaxed);
 }
 
 /** Destroy a dict_table_t's stats latch.
@@ -354,7 +355,8 @@ This function is only called from either single threaded environment
 or from a thread that has not shared the table object with other threads.
 @param[in,out]	table	table whose stats latch to destroy */
 void dict_table_stats_latch_destroy(dict_table_t *table) {
-  if (table->stats_latch_created == os_once::DONE &&
+  if (table->stats_latch_created.load(std::memory_order_relaxed) ==
+          os_once::DONE &&
       table->stats_latch != nullptr) {
     dict_table_stats_latch_free(table);
   }
