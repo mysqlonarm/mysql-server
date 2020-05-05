@@ -537,16 +537,17 @@ static void sync_array_cell_print(FILE *file, /*!< in: file where to print */
                   : (writer == RW_LOCK_SX ? "SX" : "wait exclusive"));
     }
 
-    fprintf(file,
-            "number of readers " ULINTPF ", waiters flag " ULINTPF
-            ", lock_word: %lx\n"
-            "Last time read locked in file %s line %lu\n"
-            "Last time write locked in file %s line %lu\n",
-            rw_lock_get_reader_count(rwlock), rwlock->waiters,
-            static_cast<ulong>(rwlock->lock_word),
-            innobase_basename(rwlock->last_s_file_name),
-            static_cast<ulong>(rwlock->last_s_line), rwlock->last_x_file_name,
-            static_cast<ulong>(rwlock->last_x_line));
+    fprintf(
+        file,
+        "number of readers " ULINTPF ", waiters flag " ULINTPF
+        ", lock_word: %lx\n"
+        "Last time read locked in file %s line %lu\n"
+        "Last time write locked in file %s line %lu\n",
+        rw_lock_get_reader_count(rwlock), rwlock->waiters,
+        static_cast<ulong>(rwlock->lock_word.load(std::memory_order_relaxed)),
+        innobase_basename(rwlock->last_s_file_name),
+        static_cast<ulong>(rwlock->last_s_line), rwlock->last_x_file_name,
+        static_cast<ulong>(rwlock->last_x_line));
   } else {
     ut_error;
   }
@@ -893,7 +894,7 @@ static bool sync_arr_cell_can_wake_up(
       lock = cell->latch.lock;
 
       os_rmb;
-      if (lock->lock_word > X_LOCK_HALF_DECR) {
+      if (lock->lock_word.load(std::memory_order_relaxed) > X_LOCK_HALF_DECR) {
         /* Either unlocked or only read locked. */
 
         return (true);
@@ -907,7 +908,7 @@ static bool sync_arr_cell_can_wake_up(
 
       /* lock_word == 0 means all readers or sx have left */
       os_rmb;
-      if (lock->lock_word == 0) {
+      if (lock->lock_word.load(std::memory_order_relaxed) == 0) {
         return (true);
       }
       break;
@@ -918,7 +919,7 @@ static bool sync_arr_cell_can_wake_up(
 
       /* lock_word > 0 means no writer or reserved writer */
       os_rmb;
-      if (lock->lock_word > 0) {
+      if (lock->lock_word.load(std::memory_order_relaxed) > 0) {
         return (true);
       }
   }

@@ -569,7 +569,7 @@ struct rw_lock_t
   rw_lock_t &operator=(const rw_lock_t &) = delete;
 
   /** Holds the state of the lock. */
-  volatile lint lock_word;
+  std::atomic<lint> lock_word;
 
   /** 1: there are waiters */
   volatile ulint waiters;

@@ -105,7 +105,7 @@ void rw_lock_reset_waiter_flag(rw_lock_t *lock) /*!< in/out: rw-lock */
 UNIV_INLINE
 ulint rw_lock_get_writer(const rw_lock_t *lock) /*!< in: rw-lock */
 {
-  lint lock_word = lock->lock_word;
+  lint lock_word = lock->lock_word.load(std::memory_order_relaxed);
 
   ut_ad(lock_word <= X_LOCK_DECR);
   if (lock_word > X_LOCK_HALF_DECR) {
@@ -132,7 +132,7 @@ ulint rw_lock_get_writer(const rw_lock_t *lock) /*!< in: rw-lock */
 UNIV_INLINE
 ulint rw_lock_get_reader_count(const rw_lock_t *lock) /*!< in: rw-lock */
 {
-  lint lock_word = lock->lock_word;
+  lint lock_word = lock->lock_word.load(std::memory_order_relaxed);
   ut_ad(lock_word <= X_LOCK_DECR);
 
   if (lock_word > X_LOCK_HALF_DECR) {
@@ -169,7 +169,7 @@ ib_mutex_t *rw_lock_get_mutex(rw_lock_t *lock) { return (&(lock->mutex)); }
 UNIV_INLINE
 ulint rw_lock_get_x_lock_count(const rw_lock_t *lock) /*!< in: rw-lock */
 {
-  lint lock_copy = lock->lock_word;
+  lint lock_copy = lock->lock_word.load(std::memory_order_relaxed);
   ut_ad(lock_copy <= X_LOCK_DECR);
 
   if (lock_copy == 0 || lock_copy == -X_LOCK_HALF_DECR) {
@@ -198,7 +198,7 @@ UNIV_INLINE
 ulint rw_lock_get_sx_lock_count(const rw_lock_t *lock) /*!< in: rw-lock */
 {
 #ifdef UNIV_DEBUG
-  lint lock_copy = lock->lock_word;
+  lint lock_copy = lock->lock_word.load(std::memory_order_relaxed);
 
   ut_ad(lock_copy <= X_LOCK_DECR);
 
@@ -230,21 +230,23 @@ bool rw_lock_lock_word_decr(rw_lock_t *lock, /*!< in/out: rw-lock */
 #ifdef INNODB_RW_LOCKS_USE_ATOMICS
   lint local_lock_word;
 
-  os_rmb;
-  local_lock_word = lock->lock_word;
+  local_lock_word = lock->lock_word.load(std::memory_order_acquire);
   while (local_lock_word > threshold) {
-    if (os_compare_and_swap_lint(&lock->lock_word, local_lock_word,
-                                 local_lock_word - amount)) {
+    if (lock->lock_word.compare_exchange_weak(local_lock_word,
+                                              local_lock_word - amount,
+                                              std::memory_order_acquire)) {
       return (true);
     }
-    local_lock_word = lock->lock_word;
   }
   return (false);
 #else  /* INNODB_RW_LOCKS_USE_ATOMICS */
   bool success = false;
+  lint local_lock_word;
+
   mutex_enter(&(lock->mutex));
-  if (lock->lock_word > threshold) {
-    lock->lock_word -= amount;
+  local_lock_word = lock->lock_word.load(std::memory_order_relaxed);
+  if (local_lock_word > threshold) {
+    lock->lock_word.store(local_lock_word - amount, std::memory_order_relaxed);
     success = true;
   }
   mutex_exit(&(lock->mutex));
@@ -259,14 +261,15 @@ lint rw_lock_lock_word_incr(rw_lock_t *lock, /*!< in/out: rw-lock */
                             ulint amount)    /*!< in: amount of increment */
 {
 #ifdef INNODB_RW_LOCKS_USE_ATOMICS
-  return (os_atomic_increment_lint(&lock->lock_word, amount));
+  return (lock->lock_word.fetch_add(amount, std::memory_order_release) +
+          amount);
 #else  /* INNODB_RW_LOCKS_USE_ATOMICS */
   lint local_lock_word;
 
   mutex_enter(&(lock->mutex));
 
-  lock->lock_word += amount;
-  local_lock_word = lock->lock_word;
+  local_lock_word = lock->lock_word.load(std::memory_order_relaxed) + amount;
+  lock->lock_word.store(local_lock_word, std::memory_order_relaxed);
 
   mutex_exit(&(lock->mutex));
 
@@ -354,13 +357,16 @@ ibool rw_lock_x_lock_func_nowait(
   ibool success;
 
 #ifdef INNODB_RW_LOCKS_USE_ATOMICS
-  success = os_compare_and_swap_lint(&lock->lock_word, X_LOCK_DECR, 0);
+  lint x_lock_decr = X_LOCK_DECR;
+
+  success = lock->lock_word.compare_exchange_strong(x_lock_decr, 0,
+                                                    std::memory_order_acquire);
 #else
 
   success = FALSE;
   mutex_enter(&(lock->mutex));
-  if (lock->lock_word == X_LOCK_DECR) {
-    lock->lock_word = 0;
+  if (lock->lock_word.load(std::memory_order_relaxed) == X_LOCK_DECR) {
+    lock->lock_word.store(0, std::memory_order_relaxed);
     success = TRUE;
   }
   mutex_exit(&(lock->mutex));
@@ -374,19 +380,22 @@ ibool rw_lock_x_lock_func_nowait(
     /* Relock: this lock_word modification is safe since no other
     threads can modify (lock, unlock, or reserve) lock_word while
     there is an exclusive writer and this is the writer thread. */
-    if (lock->lock_word == 0 || lock->lock_word == -X_LOCK_HALF_DECR) {
-      /* There are 1 x-locks */
-      lock->lock_word -= X_LOCK_DECR;
-    } else if (lock->lock_word <= -X_LOCK_DECR) {
+
+    lint lock_word = lock->lock_word.load(std::memory_order_relaxed);
+
+    if (lock_word == 0 || lock_word == -X_LOCK_HALF_DECR) {
+      lock_word -= X_LOCK_DECR;
+    } else if (lock_word <= -X_LOCK_DECR) {
       /* There are 2 or more x-locks */
-      lock->lock_word--;
+      lock_word--;
     } else {
       /* Failure */
       return (FALSE);
     }
+    lock->lock_word.store(lock_word, std::memory_order_relaxed);
 
     /* Watch for too many recursive locks */
-    ut_ad(lock->lock_word < 0);
+    ut_ad(lock_word < 0);
 
   } else {
     /* Failure */
@@ -412,14 +421,16 @@ void rw_lock_s_unlock_func(
 #endif               /* UNIV_DEBUG */
     rw_lock_t *lock) /*!< in/out: rw-lock */
 {
-  ut_ad(lock->lock_word > -X_LOCK_DECR);
-  ut_ad(lock->lock_word != 0);
-  ut_ad(lock->lock_word < X_LOCK_DECR);
+  lint lock_word = lock->lock_word.load(std::memory_order_relaxed);
+
+  ut_ad(lock_word > -X_LOCK_DECR);
+  ut_ad(lock_word != 0);
+  ut_ad(lock_word < X_LOCK_DECR);
 
   ut_d(rw_lock_remove_debug_info(lock, pass, RW_LOCK_S));
 
   /* Increment lock_word to indicate 1 less reader */
-  lint lock_word = rw_lock_lock_word_incr(lock, 1);
+  lock_word = rw_lock_lock_word_incr(lock, 1);
   if (lock_word == 0 || lock_word == -X_LOCK_HALF_DECR) {
     /* wait_ex waiter exists. It may not be asleep, but we signal
     anyway. We do not wake other waiters, because they can't
@@ -440,8 +451,10 @@ void rw_lock_x_unlock_func(
 #endif               /* UNIV_DEBUG */
     rw_lock_t *lock) /*!< in/out: rw-lock */
 {
-  ut_ad(lock->lock_word == 0 || lock->lock_word == -X_LOCK_HALF_DECR ||
-        lock->lock_word <= -X_LOCK_DECR);
+  lint lock_word = lock->lock_word.load(std::memory_order_relaxed);
+
+  ut_ad(lock_word == 0 || lock_word == -X_LOCK_HALF_DECR ||
+        lock_word <= -X_LOCK_DECR);
 
   /* lock->recursive == true implies that the lock->writer_thread is the
   current writer. If we are the last of the recursive callers then we must unset
@@ -450,14 +463,15 @@ void rw_lock_x_unlock_func(
   stale. Otherwise if our thread tried to reacquire the lock it would wrongly
   believe it already has it.
   Note that since we still hold the x-lock we can safely read the lock_word. */
-  if (lock->lock_word == 0) {
+  if (lock_word == 0) {
     /* Last caller in a possible recursive chain. */
     lock->recursive.store(false, std::memory_order_relaxed);
   }
 
   ut_d(rw_lock_remove_debug_info(lock, pass, RW_LOCK_X));
 
-  if (lock->lock_word == 0 || lock->lock_word == -X_LOCK_HALF_DECR) {
+  lock_word = lock->lock_word.load(std::memory_order_relaxed);
+  if (lock_word == 0 || lock_word == -X_LOCK_HALF_DECR) {
     /* There is 1 x-lock */
     /* atomic increment is needed, because it is last */
     if (rw_lock_lock_word_incr(lock, X_LOCK_DECR) <= 0) {
@@ -469,19 +483,20 @@ void rw_lock_x_unlock_func(
     We need to signal read/write waiters.
     We do not need to signal wait_ex waiters, since they cannot
     exist when there is a writer. */
+    std::atomic_thread_fence(std::memory_order_acquire);
     if (lock->waiters) {
       rw_lock_reset_waiter_flag(lock);
       os_event_set(lock->event);
       sync_array_object_signalled();
     }
-  } else if (lock->lock_word == -X_LOCK_DECR ||
-             lock->lock_word == -(X_LOCK_DECR + X_LOCK_HALF_DECR)) {
+  } else if (lock_word == -X_LOCK_DECR ||
+             lock_word == -(X_LOCK_DECR + X_LOCK_HALF_DECR)) {
     /* There are 2 x-locks */
-    lock->lock_word += X_LOCK_DECR;
+   lock->lock_word.store(lock_word + X_LOCK_DECR, std::memory_order_relaxed);
   } else {
     /* There are more than 2 x-locks. */
-    ut_ad(lock->lock_word < -X_LOCK_DECR);
-    lock->lock_word += 1;
+    ut_ad(lock_word < -X_LOCK_DECR);
+    lock->lock_word.store(lock_word + 1, std::memory_order_relaxed);
   }
 
   ut_ad(rw_lock_validate(lock));
@@ -504,8 +519,10 @@ void rw_lock_sx_unlock_func(
   ut_d(rw_lock_remove_debug_info(lock, pass, RW_LOCK_SX));
 
   if (lock->sx_recursive == 0) {
+    lint lock_word = lock->lock_word.load(std::memory_order_relaxed);
+
     /* Last caller in a possible recursive chain. */
-    if (lock->lock_word > 0) {
+    if (lock_word > 0) {
       lock->recursive.store(false, std::memory_order_relaxed);
 
       if (rw_lock_lock_word_incr(lock, X_LOCK_HALF_DECR) <= X_LOCK_HALF_DECR) {
@@ -515,6 +532,7 @@ void rw_lock_sx_unlock_func(
       waiters. We do not need to signal wait_ex waiters,
       since they cannot exist when there is an sx-lock
       holder. */
+      std::atomic_thread_fence(std::memory_order_acquire);
       if (lock->waiters) {
         rw_lock_reset_waiter_flag(lock);
         os_event_set(lock->event);
@@ -522,9 +540,10 @@ void rw_lock_sx_unlock_func(
       }
     } else {
       /* still has x-lock */
-      ut_ad(lock->lock_word == -X_LOCK_HALF_DECR ||
-            lock->lock_word <= -(X_LOCK_DECR + X_LOCK_HALF_DECR));
-      lock->lock_word += X_LOCK_HALF_DECR;
+      ut_ad(lock_word == -X_LOCK_HALF_DECR ||
+            lock_word <= -(X_LOCK_DECR + X_LOCK_HALF_DECR));
+      lock->lock_word.store(lock_word + X_LOCK_HALF_DECR,
+                            std::memory_order_relaxed);
     }
   }
 
