@@ -78,11 +78,11 @@ struct srv_conc_t {
   This is no longer true. We'll, however, keep the lint datatype to add
   assertions to catch any corner cases that we may have missed. */
 
-  volatile lint n_active;
+  std::atomic<lint> n_active;
 
   /** Number of OS threads waiting in the FIFO for permission to
   enter InnoDB */
-  volatile lint n_waiting;
+  std::atomic<lint> n_waiting;
 };
 
 /* Control variables for tracking concurrency. */
@@ -122,7 +122,7 @@ static void srv_conc_enter_innodb_with_atomics(
 
     if (srv_thread_concurrency == 0) {
       if (notified_mysql) {
-        (void)os_atomic_decrement_lint(&srv_conc.n_waiting, 1);
+        srv_conc.n_waiting.fetch_sub(1, std::memory_order_relaxed);
 
         thd_wait_end(trx->mysql_thd);
       }
@@ -130,17 +130,18 @@ static void srv_conc_enter_innodb_with_atomics(
       return;
     }
 
-    if (srv_conc.n_active < (lint)srv_thread_concurrency) {
+    if (srv_conc.n_active.load(std::memory_order_relaxed) <
+        (lint)srv_thread_concurrency) {
       ulint n_active;
 
       /* Check if there are any free tickets. */
-      n_active = os_atomic_increment_lint(&srv_conc.n_active, 1);
+      n_active = srv_conc.n_active.fetch_add(1, std::memory_order_acquire) + 1;
 
       if (n_active <= srv_thread_concurrency) {
         srv_enter_innodb_with_tickets(trx);
 
         if (notified_mysql) {
-          (void)os_atomic_decrement_lint(&srv_conc.n_waiting, 1);
+          srv_conc.n_waiting.fetch_sub(1, std::memory_order_relaxed);
 
           thd_wait_end(trx->mysql_thd);
         }
@@ -150,7 +151,7 @@ static void srv_conc_enter_innodb_with_atomics(
             --srv_thread_sleep_delay;
           }
 
-          if (srv_conc.n_waiting == 0) {
+          if (srv_conc.n_waiting.load(std::memory_order_relaxed) == 0) {
             srv_thread_sleep_delay >>= 1;
           }
         }
@@ -161,11 +162,11 @@ static void srv_conc_enter_innodb_with_atomics(
       /* Since there were no free seats, we relinquish
       the overbooked ticket. */
 
-      (void)os_atomic_decrement_lint(&srv_conc.n_active, 1);
+      srv_conc.n_active.fetch_sub(1, std::memory_order_release);
     }
 
     if (!notified_mysql) {
-      (void)os_atomic_increment_lint(&srv_conc.n_waiting, 1);
+      srv_conc.n_waiting.fetch_add(1, std::memory_order_relaxed);
 
       thd_wait_begin(trx->mysql_thd, THD_WAIT_USER_LOCK);
 
@@ -204,7 +205,7 @@ static void srv_conc_exit_innodb_with_atomics(
   trx->n_tickets_to_enter_innodb = 0;
   trx->declared_to_be_inside_innodb = FALSE;
 
-  (void)os_atomic_decrement_lint(&srv_conc.n_active, 1);
+  srv_conc.n_active.fetch_sub(1, std::memory_order_release);
 }
 
 /** Puts an OS thread to wait if there are too many concurrent threads
@@ -241,9 +242,9 @@ void srv_conc_force_enter_innodb(trx_t *trx) /*!< in: transaction object
     return;
   }
 
-  ut_ad(srv_conc.n_active >= 0);
+  ut_ad(srv_conc.n_active.load(std::memory_order_relaxed) >= 0);
 
-  (void)os_atomic_increment_lint(&srv_conc.n_active, 1);
+  srv_conc.n_active.fetch_add(1, std::memory_order_acquire);
 
   trx->n_tickets_to_enter_innodb = 1;
   trx->declared_to_be_inside_innodb = TRUE;
@@ -272,7 +273,11 @@ void srv_conc_force_exit_innodb(trx_t *trx) /*!< in: transaction object
 }
 
 /** Get the count of threads waiting inside InnoDB. */
-ulint srv_conc_get_waiting_threads(void) { return (srv_conc.n_waiting); }
+ulint srv_conc_get_waiting_threads(void) {
+  return (srv_conc.n_waiting.load(std::memory_order_relaxed));
+}
 
 /** Get the count of threads active inside InnoDB. */
-ulint srv_conc_get_active_threads(void) { return (srv_conc.n_active); }
+ulint srv_conc_get_active_threads(void) {
+  return (srv_conc.n_active.load(std::memory_order_relaxed));
+}
