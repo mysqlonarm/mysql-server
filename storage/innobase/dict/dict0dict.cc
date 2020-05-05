@@ -4753,6 +4753,7 @@ static void dict_index_zip_pad_update(
 {
   ulint total;
   ulint fail_pct;
+  ulint pad;
 
   ut_ad(info);
 
@@ -4770,6 +4771,8 @@ static void dict_index_zip_pad_update(
     return;
   }
 
+  pad = info->pad.load(std::memory_order_relaxed);
+
   /* We are at a 'round' boundary. Reset the values but first
   calculate fail rate for our heuristic. */
   fail_pct = (info->failure * 100) / total;
@@ -4780,15 +4783,15 @@ static void dict_index_zip_pad_update(
     /* Compression failures are more then user defined
     threshold. Increase the pad size to reduce chances of
     compression failures. */
-    ut_ad(info->pad % ZIP_PAD_INCR == 0);
+    ut_ad(pad % ZIP_PAD_INCR == 0);
 
     /* Only do increment if it won't increase padding
     beyond max pad size. */
-    if (info->pad + ZIP_PAD_INCR < (UNIV_PAGE_SIZE * zip_pad_max) / 100) {
+    if (pad + ZIP_PAD_INCR < (UNIV_PAGE_SIZE * zip_pad_max) / 100) {
       /* Use atomics even though we have the mutex.
       This is to ensure that we are able to read
       info->pad atomically. */
-      os_atomic_increment_ulint(&info->pad, ZIP_PAD_INCR);
+      info->pad.fetch_add(ZIP_PAD_INCR, std::memory_order_relaxed);
 
       MONITOR_INC(MONITOR_PAD_INCREMENTS);
     }
@@ -4803,12 +4806,12 @@ static void dict_index_zip_pad_update(
     /* If enough successful rounds are completed with
     compression failure rate in control, decrease the
     padding. */
-    if (info->n_rounds >= ZIP_PAD_SUCCESSFUL_ROUND_LIMIT && info->pad > 0) {
-      ut_ad(info->pad % ZIP_PAD_INCR == 0);
+    if (info->n_rounds >= ZIP_PAD_SUCCESSFUL_ROUND_LIMIT && pad > 0) {
+      ut_ad(pad % ZIP_PAD_INCR == 0);
       /* Use atomics even though we have the mutex.
       This is to ensure that we are able to read
       info->pad atomically. */
-      os_atomic_decrement_ulint(&info->pad, ZIP_PAD_INCR);
+      info->pad.fetch_sub(ZIP_PAD_INCR, std::memory_order_relaxed);
 
       info->n_rounds = 0;
 
@@ -4872,10 +4875,8 @@ ulint dict_index_zip_pad_optimal_page_size(
     return (UNIV_PAGE_SIZE);
   }
 
-  /* We use atomics to read index->zip_pad.pad. Here we use zero
-  as increment as are not changing the value of the 'pad'. */
-
-  pad = os_atomic_increment_ulint(&index->zip_pad.pad, 0);
+  /* We use atomics to read index->zip_pad.pad.*/
+  pad = index->zip_pad.pad.load(std::memory_order_relaxed);
 
   ut_ad(pad < UNIV_PAGE_SIZE);
   sz = UNIV_PAGE_SIZE - pad;
