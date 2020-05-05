@@ -543,7 +543,8 @@ static void sync_array_cell_print(FILE *file, /*!< in: file where to print */
         ", lock_word: %lx\n"
         "Last time read locked in file %s line %lu\n"
         "Last time write locked in file %s line %lu\n",
-        rw_lock_get_reader_count(rwlock), rwlock->waiters,
+        rw_lock_get_reader_count(rwlock),
+        rwlock->waiters.load(std::memory_order_relaxed),
         static_cast<ulong>(rwlock->lock_word.load(std::memory_order_relaxed)),
         innobase_basename(rwlock->last_s_file_name),
         static_cast<ulong>(rwlock->last_s_line), rwlock->last_x_file_name,

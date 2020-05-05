@@ -220,7 +220,7 @@ void rw_lock_create_func(
 #endif /* INNODB_RW_LOCKS_USE_ATOMICS */
 
   lock->lock_word.store(X_LOCK_DECR, std::memory_order_relaxed);
-  lock->waiters = 0;
+  lock->waiters.store(0, std::memory_order_relaxed);
 
   lock->recursive.store(false, std::memory_order_relaxed);
   lock->sx_recursive = 0;

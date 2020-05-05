@@ -68,7 +68,7 @@ void rw_lock_remove_debug_info(rw_lock_t *lock,  /*!< in: rw-lock */
 UNIV_INLINE
 ulint rw_lock_get_waiters(const rw_lock_t *lock) /*!< in: rw-lock */
 {
-  return (lock->waiters);
+  return (lock->waiters.load(std::memory_order_relaxed));
 }
 
 /** Sets lock->waiters to 1. It is not an error if lock->waiters is already
@@ -78,7 +78,8 @@ UNIV_INLINE
 void rw_lock_set_waiter_flag(rw_lock_t *lock) /*!< in/out: rw-lock */
 {
 #ifdef INNODB_RW_LOCKS_USE_ATOMICS
-  (void)os_compare_and_swap_ulint(&lock->waiters, 0, 1);
+  ulint v = 0;
+  lock->waiters.compare_exchange_strong(v, 1, std::memory_order_acquire);
 #else  /* INNODB_RW_LOCKS_USE_ATOMICS */
   lock->waiters = 1;
   os_wmb;
@@ -92,7 +93,8 @@ UNIV_INLINE
 void rw_lock_reset_waiter_flag(rw_lock_t *lock) /*!< in/out: rw-lock */
 {
 #ifdef INNODB_RW_LOCKS_USE_ATOMICS
-  (void)os_compare_and_swap_ulint(&lock->waiters, 1, 0);
+  ulint v = 1;
+  lock->waiters.compare_exchange_strong(v, 0, std::memory_order_acquire);
 #else  /* INNODB_RW_LOCKS_USE_ATOMICS */
   lock->waiters = 0;
   os_wmb;
@@ -484,7 +486,7 @@ void rw_lock_x_unlock_func(
     We do not need to signal wait_ex waiters, since they cannot
     exist when there is a writer. */
     std::atomic_thread_fence(std::memory_order_acquire);
-    if (lock->waiters) {
+    if (lock->waiters.load(std::memory_order_relaxed)) {
       rw_lock_reset_waiter_flag(lock);
       os_event_set(lock->event);
       sync_array_object_signalled();
@@ -533,7 +535,7 @@ void rw_lock_sx_unlock_func(
       since they cannot exist when there is an sx-lock
       holder. */
       std::atomic_thread_fence(std::memory_order_acquire);
-      if (lock->waiters) {
+      if (lock->waiters.load(std::memory_order_relaxed)) {
         rw_lock_reset_waiter_flag(lock);
         os_event_set(lock->event);
         sync_array_object_signalled();

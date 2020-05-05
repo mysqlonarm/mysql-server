@@ -572,7 +572,7 @@ struct rw_lock_t
   std::atomic<lint> lock_word;
 
   /** 1: there are waiters */
-  volatile ulint waiters;
+  std::atomic<ulint> waiters;
 
   /** Default value FALSE which means the lock is non-recursive.
   The value is typically set to TRUE making normal rw_locks recursive.
