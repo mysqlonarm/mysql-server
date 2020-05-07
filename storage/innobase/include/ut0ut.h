@@ -115,6 +115,13 @@ to memory). */
 the YieldProcessor macro defined in WinNT.h. It is a CPU architecture-
 independent way by using YieldProcessor. */
 #define UT_RELAX_CPU() YieldProcessor()
+#elif defined(__aarch64__)
+#define UT_RELAX_CPU()                                                     \
+  {                                                                        \
+    uint32_t var = 1, oldval = 2;                                          \
+    __atomic_compare_exchange_n(&var, &oldval, 3, false, __ATOMIC_RELAXED, \
+                                __ATOMIC_RELAXED);                         \
+  }
 #else
 #define UT_RELAX_CPU() __asm__ __volatile__("" ::: "memory")
 #endif
