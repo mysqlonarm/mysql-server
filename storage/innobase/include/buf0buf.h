@@ -1662,12 +1662,11 @@ struct buf_buddy_free_t {
 
 /** @brief The buffer pool statistics structure. */
 struct buf_pool_stat_t {
-  using Shards = Counter::Shards<64>;
 
   /** Number of page gets performed; also successful searches through the
   adaptive hash index are counted as page gets; this field is NOT protected
   by the buffer pool mutex */
-  Shards m_n_page_gets;
+  ib_atomic_counter_t<uint64_t, 128, atomic_slot_padded_t> m_n_page_gets;
 
   /** Number of read operations. Accessed atomically. */
   uint64_t n_pages_read;
@@ -1703,7 +1702,7 @@ struct buf_pool_stat_t {
   uint64_t flush_list_bytes;
 
   static void copy(buf_pool_stat_t &dst, const buf_pool_stat_t &src) noexcept {
-    Counter::copy(dst.m_n_page_gets, src.m_n_page_gets);
+    dst.m_n_page_gets.copy(src.m_n_page_gets);
 
     dst.n_pages_read = src.n_pages_read;
 
@@ -1727,7 +1726,7 @@ struct buf_pool_stat_t {
   }
 
   void reset() {
-    Counter::clear(m_n_page_gets);
+    m_n_page_gets.clear();
 
     n_pages_read = 0;
     n_pages_written = 0;

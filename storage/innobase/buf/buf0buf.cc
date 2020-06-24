@@ -486,7 +486,7 @@ void buf_get_total_stat(
     buf_pool_t *buf_pool = buf_pool_from_array(i);
     buf_pool_stat_t *buf_stat = &buf_pool->stat;
 
-    Counter::add(tot_stat->m_n_page_gets, buf_stat->m_n_page_gets);
+    tot_stat->m_n_page_gets.add(buf_stat->m_n_page_gets);
     tot_stat->n_pages_read += buf_stat->n_pages_read;
     tot_stat->n_pages_written += buf_stat->n_pages_written;
     tot_stat->n_pages_created += buf_stat->n_pages_created;
@@ -3068,7 +3068,7 @@ buf_page_t *buf_page_get_zip(const page_id_t &page_id,
   ibool must_read;
   buf_pool_t *buf_pool = buf_pool_get(page_id);
 
-  Counter::inc(buf_pool->stat.m_n_page_gets, page_id.page_no());
+  buf_pool->stat.m_n_page_gets.inc();
 
   for (;;) {
   lookup:
@@ -4006,7 +4006,7 @@ template <typename T>
 buf_block_t *Buf_fetch<T>::single_page() {
   buf_block_t *block;
 
-  Counter::inc(m_buf_pool->stat.m_n_page_gets, m_page_id.page_no());
+  m_buf_pool->stat.m_n_page_gets.inc();
 
   for (;;) {
     if (static_cast<T *>(this)->get(block) == DB_NOT_FOUND) {
@@ -4306,7 +4306,7 @@ bool buf_page_optimistic_get(ulint rw_latch, buf_block_t *block,
 
   {
     auto buf_pool = buf_pool_from_block(block);
-    Counter::inc(buf_pool->stat.m_n_page_gets, block->page.id.page_no());
+    buf_pool->stat.m_n_page_gets.inc();
   }
 
   return (true);
@@ -4399,7 +4399,7 @@ bool buf_page_get_known_nowait(ulint rw_latch, buf_block_t *block,
   ut_a((hint == Cache_hint::KEEP_OLD) || ibuf_count_get(block->page.id) == 0);
 #endif /* UNIV_IBUF_COUNT_DEBUG */
 
-  Counter::inc(buf_pool->stat.m_n_page_gets, block->page.id.page_no());
+  buf_pool->stat.m_n_page_gets.inc();
 
   return (true);
 }
@@ -4478,7 +4478,7 @@ const buf_block_t *buf_page_try_get_func(const page_id_t &page_id,
 
   buf_block_dbg_add_level(block, SYNC_NO_ORDER_CHECK);
 
-  Counter::inc(buf_pool->stat.m_n_page_gets, block->page.id.page_no());
+  buf_pool->stat.m_n_page_gets.inc();
 
 #ifdef UNIV_IBUF_COUNT_DEBUG
   ut_a(ibuf_count_get(block->page.id) == 0);
@@ -6009,7 +6009,7 @@ void buf_stats_get_pool_info(
 
   pool_info->n_pages_written = buf_pool->stat.n_pages_written;
 
-  pool_info->n_page_gets = Counter::total(buf_pool->stat.m_n_page_gets);
+  pool_info->n_page_gets = buf_pool->stat.m_n_page_gets.total();
 
   pool_info->n_ra_pages_read_rnd = buf_pool->stat.n_ra_pages_read_rnd;
   pool_info->n_ra_pages_read = buf_pool->stat.n_ra_pages_read;
@@ -6038,8 +6038,8 @@ void buf_stats_get_pool_info(
       time_elapsed;
 
   pool_info->n_page_get_delta =
-      Counter::total(buf_pool->stat.m_n_page_gets) -
-      Counter::total(buf_pool->old_stat.m_n_page_gets);
+      buf_pool->stat.m_n_page_gets.total() -
+      buf_pool->old_stat.m_n_page_gets.total();
 
   if (pool_info->n_page_get_delta) {
     pool_info->page_read_delta =
