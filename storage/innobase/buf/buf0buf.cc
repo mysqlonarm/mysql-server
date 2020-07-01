@@ -4550,7 +4550,7 @@ static void buf_page_init(buf_pool_t *buf_pool, const page_id_t &page_id,
 
     ut_a(buf_fix_count > 0);
 
-    os_atomic_increment_uint32(&block->page.buf_fix_count, buf_fix_count);
+    block->page.buf_fix_count += buf_fix_count;
 
     buf_pool_watch_remove(buf_pool, hash_page);
   } else {
@@ -4759,7 +4759,7 @@ buf_page_t *buf_page_init_for_read(dberr_t *err, ulint mode,
 
       ut_a(buf_fix_count > 0);
 
-      os_atomic_increment_uint32(&bpage->buf_fix_count, buf_fix_count);
+      bpage->buf_fix_count += buf_fix_count;
 
       ut_ad(buf_pool_watch_is_sentinel(buf_pool, watch_page));
       buf_pool_watch_remove(buf_pool, watch_page);

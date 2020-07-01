@@ -348,7 +348,7 @@ void trx_purge_add_update_undo_to_history(
                  undo_header + TRX_UNDO_HISTORY_NODE, mtr);
 
   if (update_rseg_history_len) {
-    os_atomic_increment_ulint(&trx_sys->rseg_history_len, n_added_logs);
+    trx_sys->rseg_history_len += n_added_logs;
     srv_wake_purge_thread_if_not_active();
   }
 
@@ -384,7 +384,7 @@ static void trx_purge_remove_log_hdr(trx_rsegf_t *rseg_hdr,
   flst_remove(rseg_hdr + TRX_RSEG_HISTORY, log_hdr + TRX_UNDO_HISTORY_NODE,
               mtr);
 
-  os_atomic_decrement_ulint(&trx_sys->rseg_history_len, 1);
+  --trx_sys->rseg_history_len;
 }
 
 /** Frees a rollback segment which is in the history list.
