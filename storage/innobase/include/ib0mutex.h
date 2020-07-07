@@ -532,13 +532,13 @@ struct TTASEventMutex {
   @return true on success */
   bool try_lock() UNIV_NOTHROW {
     bool expected = false;
-    return (m_lock_word.compare_exchange_strong(expected, true));
+    return (m_lock_word.compare_exchange_strong(
+        expected, true, std::memory_order_acquire, std::memory_order_acquire));
   }
 
   /** Release the mutex. */
   void exit() UNIV_NOTHROW {
-    m_lock_word.store(false);
-    std::atomic_thread_fence(std::memory_order_acquire);
+    m_lock_word.store(false, std::memory_order_release);
 
     if (m_waiters.load(std::memory_order_acquire)) {
       signal();
@@ -684,7 +684,7 @@ struct TTASEventMutex {
 
   /** Note that there are no threads waiting on the mutex */
   void clear_waiters() UNIV_NOTHROW {
-    m_waiters.store(false, std::memory_order_release);
+    m_waiters.store(false, std::memory_order_acquire);
   }
 
   /** Wakeup any waiting thread(s). */
