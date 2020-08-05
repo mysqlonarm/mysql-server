@@ -29,8 +29,8 @@
 
 #include <string.h>
 #include <algorithm>
-#include <atomic>
 
+#include "my_atomic.h"
 #include "lex_string.h"
 #include "lf.h"
 #include "my_dbug.h"
@@ -68,7 +68,7 @@ bool pfs_enabled = true;
   Incremented when a shared library is being unloaded, decremented when
   the performance schema is finished processing the event.
 */
-std::atomic<uint32> pfs_unload_plugin_ref_count(0);
+atomic_counter_t<uint32> pfs_unload_plugin_ref_count(0);
 
 /**
   PFS_INSTRUMENT option settings array
@@ -88,12 +88,12 @@ static void init_instr_class(PFS_instr_class *klass, const char *name,
   - the performance schema initialization
   - a plugin initialization
 */
-static std::atomic<uint32> mutex_class_dirty_count{0};
-static std::atomic<uint32> mutex_class_allocated_count{0};
-static std::atomic<uint32> rwlock_class_dirty_count{0};
-static std::atomic<uint32> rwlock_class_allocated_count{0};
-static std::atomic<uint32> cond_class_dirty_count{0};
-static std::atomic<uint32> cond_class_allocated_count{0};
+static atomic_counter_t<uint32> mutex_class_dirty_count{0};
+static atomic_counter_t<uint32> mutex_class_allocated_count{0};
+static atomic_counter_t<uint32> rwlock_class_dirty_count{0};
+static atomic_counter_t<uint32> rwlock_class_allocated_count{0};
+static atomic_counter_t<uint32> cond_class_dirty_count{0};
+static atomic_counter_t<uint32> cond_class_allocated_count{0};
 
 /** Size of the mutex class array. @sa mutex_class_array */
 ulong mutex_class_max = 0;
@@ -156,8 +156,8 @@ PFS_cond_class *cond_class_array = nullptr;
   - the performance schema initialization
   - a plugin initialization
 */
-static std::atomic<uint32> thread_class_dirty_count{0};
-static std::atomic<uint32> thread_class_allocated_count{0};
+static atomic_counter_t<uint32> thread_class_dirty_count{0};
+static atomic_counter_t<uint32> thread_class_allocated_count{0};
 
 static PFS_thread_class *thread_class_array = nullptr;
 
@@ -187,28 +187,28 @@ LF_HASH table_share_hash;
 /** True if table_share_hash is initialized. */
 static bool table_share_hash_inited = false;
 
-static std::atomic<uint32> file_class_dirty_count{0};
-static std::atomic<uint32> file_class_allocated_count{0};
+static atomic_counter_t<uint32> file_class_dirty_count{0};
+static atomic_counter_t<uint32> file_class_allocated_count{0};
 
 PFS_file_class *file_class_array = nullptr;
 
-static std::atomic<uint32> stage_class_dirty_count{0};
-static std::atomic<uint32> stage_class_allocated_count{0};
+static atomic_counter_t<uint32> stage_class_dirty_count{0};
+static atomic_counter_t<uint32> stage_class_allocated_count{0};
 
 static PFS_stage_class *stage_class_array = nullptr;
 
-static std::atomic<uint32> statement_class_dirty_count{0};
-static std::atomic<uint32> statement_class_allocated_count{0};
+static atomic_counter_t<uint32> statement_class_dirty_count{0};
+static atomic_counter_t<uint32> statement_class_allocated_count{0};
 
 static PFS_statement_class *statement_class_array = nullptr;
 
-static std::atomic<uint32> socket_class_dirty_count{0};
-static std::atomic<uint32> socket_class_allocated_count{0};
+static atomic_counter_t<uint32> socket_class_dirty_count{0};
+static atomic_counter_t<uint32> socket_class_allocated_count{0};
 
 static PFS_socket_class *socket_class_array = nullptr;
 
-static std::atomic<uint32> memory_class_dirty_count{0};
-static std::atomic<uint32> memory_class_allocated_count{0};
+static atomic_counter_t<uint32> memory_class_dirty_count{0};
+static atomic_counter_t<uint32> memory_class_allocated_count{0};
 
 static std::atomic<PFS_memory_class *> memory_class_array{nullptr};
 

@@ -26,8 +26,8 @@
 #include "my_config.h"
 
 #include <sys/types.h>
-#include <atomic>
 
+#include "my_atomic.h"
 #include "lf.h"
 #include "my_compiler.h"
 #include "my_dbug.h"
@@ -74,7 +74,7 @@ class PFS_opaque_container_page;
 extern bool pfs_enabled;
 
 /** Global ref count for plugin and component events. */
-extern std::atomic<uint32> pfs_unload_plugin_ref_count;
+extern atomic_counter_t<uint32> pfs_unload_plugin_ref_count;
 
 /** Key, naming a synch instrument (mutex, rwlock, cond). */
 typedef unsigned int PFS_sync_key;
@@ -381,7 +381,7 @@ struct PFS_ALIGNED PFS_table_share {
 
  private:
   /** Number of opened table handles. */
-  std::atomic<int> m_refcount;
+  atomic_counter_t<int> m_refcount;
   /** Table locks statistics. */
   std::atomic<PFS_table_share_lock *> m_race_lock_stat;
   /** Table indexes stats. */

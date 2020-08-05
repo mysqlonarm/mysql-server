@@ -30,8 +30,8 @@
 #include <mysql/components/services/pfs_notification.h>
 #include <mysql/plugin.h>
 #include <string.h>
-#include <atomic>
 
+#include "my_atomic.h"
 #include "my_systime.h"  // my_sleep()
 #include "pfs_thread_provider.h"
 #include "storage/perfschema/pfs_server.h"
@@ -79,7 +79,7 @@ struct PFS_notification_node {
   /** True if can be unregistered. */
   bool m_use_ref_count;
   /** Reference count with high bit as enabled flag. */
-  std::atomic<std::uint32_t> m_refs;
+  atomic_counter_t<std::uint32_t> m_refs;
   /** Next registration. */
   std::atomic<PFS_notification_node *> m_next;
   /** Bitmap of registered callbacks. */
@@ -295,7 +295,7 @@ struct PFS_notification_registry {
   static const std::uint32_t FREE_MASK = 0x80000000;
 
   std::atomic<PFS_notification_node *> m_head;
-  std::atomic<std::uint32_t> m_count;
+  atomic_counter_t<std::uint32_t> m_count;
 };
 
 /**

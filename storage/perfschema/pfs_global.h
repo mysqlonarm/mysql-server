@@ -25,7 +25,7 @@
 
 #include "my_config.h"
 
-#include <atomic>
+#include "my_atomic.h"
 
 #include <stddef.h>
 #ifdef HAVE_SYS_SOCKET_H
@@ -72,8 +72,7 @@ extern bool pfs_initialized;
   This is for performance, for variables accessed very frequently.
 */
 struct PFS_cacheline_atomic_uint32 {
-  std::atomic<uint32> m_u32;
-  char m_full_cache_line[PFS_CACHE_LINE_SIZE - sizeof(std::atomic<uint32>)];
+  atomic_counter_t<uint32> m_u32;
 
   PFS_cacheline_atomic_uint32() : m_u32(0) {}
 };
@@ -83,8 +82,7 @@ struct PFS_cacheline_atomic_uint32 {
   This is for performance, for variables accessed very frequently.
 */
 struct PFS_cacheline_atomic_uint64 {
-  std::atomic<uint64> m_u64;
-  char m_full_cache_line[PFS_CACHE_LINE_SIZE - sizeof(std::atomic<uint64>)];
+  atomic_counter_t<uint64> m_u64;
 
   PFS_cacheline_atomic_uint64() : m_u64(0) {}
 };
@@ -94,8 +92,7 @@ struct PFS_cacheline_atomic_uint64 {
   This is for performance, for variables accessed very frequently.
 */
 struct PFS_cacheline_atomic_size_t {
-  std::atomic<size_t> m_size_t;
-  char m_full_cache_line[PFS_CACHE_LINE_SIZE - sizeof(std::atomic<size_t>)];
+  atomic_counter_t<size_t> m_size_t;
 
   PFS_cacheline_atomic_size_t() : m_size_t(0) {}
 };
