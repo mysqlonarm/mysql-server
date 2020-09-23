@@ -55,6 +55,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "univ.i"
 #include "ut0link_buf.h"
 #include "ut0mutex.h"
+#include "my_atomic.h"
 
 /** Type used for all log sequence number storage and arithmetics. */
 typedef uint64_t lsn_t;
@@ -63,14 +64,14 @@ typedef uint64_t lsn_t;
 #define LSN_PF UINT64PF
 
 /** Alias for atomic based on lsn_t. */
-using atomic_lsn_t = std::atomic<lsn_t>;
+using atomic_lsn_t = atomic_counter_t<lsn_t>;
 
 /** Type used for sn values, which enumerate bytes of data stored in the log.
 Note that these values skip bytes of headers and footers of log blocks. */
 typedef uint64_t sn_t;
 
 /** Alias for atomic based on sn_t. */
-using atomic_sn_t = std::atomic<sn_t>;
+using atomic_sn_t = atomic_counter_t<sn_t>;
 
 /** Type used for checkpoint numbers (consecutive checkpoints receive
 a number which is increased by one). */
@@ -78,7 +79,7 @@ typedef uint64_t checkpoint_no_t;
 
 /** Type used for counters in log_t: flushes_requested and flushes_expected.
 They represent number of requests to flush the redo log to disk. */
-typedef std::atomic<int64_t> log_flushes_t;
+typedef atomic_counter_t<int64_t> log_flushes_t;
 
 /** Function used to calculate checksums of log blocks. */
 typedef std::atomic<uint32_t (*)(const byte *log_block)> log_checksum_func_t;

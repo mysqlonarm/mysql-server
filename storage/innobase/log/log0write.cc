@@ -858,7 +858,7 @@ static Wait_stats log_wait_for_write(const log_t &log, lsn_t lsn) {
 @param[in]	lsn	wait until log.flushed_to_disk_lsn >= lsn
 @return		statistics related to waiting inside */
 static Wait_stats log_wait_for_flush(const log_t &log, lsn_t lsn) {
-  if (log.write_lsn.load(std::memory_order_relaxed) < lsn) {
+  if (log.write_lsn.load() < lsn) {
     os_event_set(log.writer_event);
   }
   os_event_set(log.flusher_event);
@@ -878,7 +878,7 @@ static Wait_stats log_wait_for_flush(const log_t &log, lsn_t lsn) {
     }
 
     if (wait) {
-      if (log.write_lsn.load(std::memory_order_relaxed) < lsn) {
+      if (log.write_lsn.load() < lsn) {
         os_event_set(log.writer_event);
       }
 
