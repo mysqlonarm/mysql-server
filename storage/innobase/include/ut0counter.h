@@ -109,6 +109,34 @@ struct single_indexer_t {
   }
 };
 
+/** core affinity indexer */
+template <typename Type = uint64_t, size_t N = IB_N_SLOTS>
+struct core_affinity_indexer_t {
+  /** Default constructor/destructor should be OK. */
+  enum { fast = 1 };
+
+  static size_t offset() UNIV_NOTHROW {
+#ifdef HAVE_SCHED_GETCPU
+    return (sched_getcpu());
+#else
+    size_t c = static_cast<size_t>(my_timer_cycles());
+
+    if (c != 0) {
+      return (c);
+    } else {
+#if !defined(_WIN32)
+      return (size_t(os_thread_get_curr_id()));
+#else
+      LARGE_INTEGER cnt;
+      QueryPerformanceCounter(&cnt);
+
+      return (static_cast<size_t>(cnt.QuadPart));
+#endif /* !_WIN32 */
+    }
+#endif /* HAVE_SCHED_GETCPU */
+  }
+};
+
 #define default_indexer_t counter_indexer_t
 
 /** Class for using fuzzy counters. The counter is not protected by any
@@ -368,5 +396,97 @@ inline void add(Shards<COUNT> &dst, const Shards<COUNT> &src) noexcept {
   });
 }
 }  // namespace Counter
+
+/* Atomic Counter with N slots */
+
+template <typename Type = uint64_t>
+struct atomic_slot_padded_t {
+  char m_pad[INNOBASE_CACHE_LINE_SIZE - sizeof(std::atomic<Type>)];
+  std::atomic<Type> m_value{};
+};
+
+template <typename Type = uint64_t>
+struct atomic_slot_aligned_t {
+  alignas(INNOBASE_CACHE_LINE_SIZE) std::atomic<Type> m_value{};
+};
+
+template <typename Type = uint64_t>
+struct atomic_slot_t {
+  std::atomic<Type> m_value{};
+};
+
+template <typename Type, int N = IB_N_SLOTS,
+          template <typename> class Slot = atomic_slot_aligned_t,
+          template <typename, size_t> class Indexer = core_affinity_indexer_t>
+class ib_atomic_counter_t {
+ public:
+  ib_atomic_counter_t() : m_slots() {}
+
+  void inc() UNIV_NOTHROW { inc(1); }
+  void dec() UNIV_NOTHROW { dec(1); }
+  void add(size_t id, Type incr) UNIV_NOTHROW { inc(incr); }
+  void sub(size_t id, Type decr) UNIV_NOTHROW { dec(decr); }
+
+  void inc(Type incr) UNIV_NOTHROW {
+    size_t id = m_policy.offset();
+
+    m_slots[id % m_slots.size()].m_value.fetch_add(incr,
+                                                   std::memory_order_relaxed);
+  }
+
+  void dec(Type decr) UNIV_NOTHROW {
+    size_t id = m_policy.offset();
+    m_slots[id % m_slots.size()].m_value.fetch_sub(decr,
+                                                   std::memory_order_relaxed);
+  }
+
+  Type total() const UNIV_NOTHROW { return get(); }
+
+  Type get() const UNIV_NOTHROW {
+    Type total = 0;
+    for (size_t i = 0; i < m_slots.size(); ++i) {
+      total += m_slots[i].m_value.load(std::memory_order_relaxed);
+    }
+    return total;
+  }
+
+  void set(uint64_t val) UNIV_NOTHROW {
+    reset();
+    size_t id = m_policy.offset() % m_slots.size();
+    m_slots[id].m_value.store(val, std::memory_order_relaxed);
+  }
+
+  void clear() UNIV_NOTHROW { reset(); }
+
+  void reset() UNIV_NOTHROW {
+    for (size_t i = 0; i < m_slots.size(); ++i) {
+      m_slots[i].m_value.store(0);
+    }
+  }
+
+  void copy(const ib_atomic_counter_t &src) {
+    for (size_t i = 0; i < m_slots.size(); ++i) {
+      m_slots[i].m_value.store(
+          src.m_slots[i].m_value.load(std::memory_order_relaxed),
+          std::memory_order_relaxed);
+    }
+  }
+
+  void add(const ib_atomic_counter_t &src) {
+    for (size_t i = 0; i < m_slots.size(); ++i) {
+      m_slots[i].m_value.fetch_add(
+          src.m_slots[i].m_value.load(std::memory_order_relaxed),
+          std::memory_order_relaxed);
+    }
+  }
+
+  operator Type() const UNIV_NOTHROW { return get(); }
+
+ private:
+  /** Indexer into the array */
+  Indexer<Type, N> m_policy;
+
+  std::array<Slot<Type>, N> m_slots;
+};
 
 #endif /* ut0counter_h */
