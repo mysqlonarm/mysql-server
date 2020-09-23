@@ -505,7 +505,7 @@ struct trx_sys_t {
                    read-only during multi-threaded
                    operation. */
 
-  ulint rseg_history_len;
+  atomic_counter_t<ulint> rseg_history_len;
   /*!< Length of the TRX_RSEG_HISTORY
   list (update undo logs for committed
   transactions), protected by

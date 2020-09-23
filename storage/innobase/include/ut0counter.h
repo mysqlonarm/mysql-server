@@ -46,6 +46,11 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include <atomic>
 #include <functional>
 
+#include "my_atomic.h" /* CACHE_LINE_SIZE */
+
+/** CPU cache line size */
+#define INNOBASE_CACHE_LINE_SIZE CACHE_LINE_SIZE
+
 /** Default number of slots to use in ib_counter_t */
 #define IB_N_SLOTS 64
 

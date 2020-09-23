@@ -45,6 +45,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "ut0byte.h"
 #include "ut0rbt.h"
 
+#include "my_atomic.h"
+
 #include "buf/buf.h"
 
 #include <ostream>
@@ -1187,7 +1189,7 @@ class buf_page_t {
   page_size_t size;
 
   /** Count of how manyfold this block is currently bufferfixed. */
-  uint32_t buf_fix_count;
+  atomic_counter_t<uint32_t> buf_fix_count;
 
   /** type of pending I/O operation. */
   buf_io_fix io_fix;
