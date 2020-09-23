@@ -95,8 +95,6 @@ bool TTASEventMutex<Policy>::wait(const char *filename, uint32_t line,
 
 template <template <typename> class Policy>
 void TTASEventMutex<Policy>::signal() UNIV_NOTHROW {
-  clear_waiters();
-
   /* The memory order of resetting the waiters field and
   signaling the object is important. See LEMMA 1 above. */
   os_event_set(m_event);
