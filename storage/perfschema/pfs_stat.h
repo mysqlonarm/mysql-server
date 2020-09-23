@@ -24,8 +24,8 @@
 #define PFS_STAT_H
 
 #include <algorithm>
-#include <atomic>
 
+#include "my_atomic.h"
 #include "my_dbug.h"
 #include "my_sys.h"
 #include "my_systime.h"
@@ -1055,16 +1055,16 @@ void memory_full_aggregate(const F *from, T *stat1, T *stat2) {
 }
 
 struct PFS_memory_shared_stat {
-  std::atomic<bool> m_used;
-  std::atomic<size_t> m_alloc_count;
-  std::atomic<size_t> m_free_count;
-  std::atomic<size_t> m_alloc_size;
-  std::atomic<size_t> m_free_size;
+  atomic_counter_t<bool> m_used;
+  atomic_counter_t<size_t> m_alloc_count;
+  atomic_counter_t<size_t> m_free_count;
+  atomic_counter_t<size_t> m_alloc_size;
+  atomic_counter_t<size_t> m_free_size;
 
-  std::atomic<size_t> m_alloc_count_capacity;
-  std::atomic<size_t> m_free_count_capacity;
-  std::atomic<size_t> m_alloc_size_capacity;
-  std::atomic<size_t> m_free_size_capacity;
+  atomic_counter_t<size_t> m_alloc_count_capacity;
+  atomic_counter_t<size_t> m_free_count_capacity;
+  atomic_counter_t<size_t> m_alloc_size_capacity;
+  atomic_counter_t<size_t> m_free_size_capacity;
 
   inline void reset(void) {
     m_used = false;

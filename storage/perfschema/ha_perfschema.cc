@@ -27,7 +27,6 @@
   @file storage/perfschema/ha_perfschema.cc
   Performance schema storage engine (implementation).
 */
-#include <atomic>
 
 #include "lex_string.h"
 #include "lf.h"
@@ -1283,11 +1282,11 @@ end:
 }
 
 static void inc_ref_count(PFS_engine_table_share *share) {
-  std::atomic_fetch_add(&share->m_ref_count, 1);
+  ++share->m_ref_count;
 }
 
 static void dec_ref_count(PFS_engine_table_share *share) {
-  std::atomic_fetch_sub(&share->m_ref_count, 1);
+  --share->m_ref_count;
 }
 
 static int compare_database_names(const char *name1, const char *name2) {

@@ -60,4 +60,47 @@ static inline int my_yield_processor() {
 
 #endif
 
+#include <atomic>
+#ifdef __powerpc__
+#define CACHE_LINE_SIZE 128
+#else
+#define CACHE_LINE_SIZE 64
+#endif /* __powerpc__ */
+
+template <typename T>
+class atomic_counter_t {
+ private:
+  char m_pad[CACHE_LINE_SIZE - sizeof(std::atomic<T>)];
+  std::atomic<T> m_counter;
+
+ public:
+  atomic_counter_t(T n) : m_counter(n) {}
+  atomic_counter_t() {}
+
+  atomic_counter_t(const atomic_counter_t &rhs) { m_counter.store(rhs.load()); }
+
+  T fetch_add(T n) { return m_counter.fetch_add(n, std::memory_order_relaxed); }
+  T fetch_sub(T n) { return m_counter.fetch_sub(n, std::memory_order_relaxed); }
+  T fetch_or(T n) { return m_counter.fetch_or(n, std::memory_order_relaxed); }
+
+  T add(T n) { return fetch_add(n); }
+  T sub(T n) { return fetch_sub(n); }
+  T load() const { return m_counter.load(std::memory_order_relaxed); }
+  void store(T n) { m_counter.store(n, std::memory_order_relaxed); }
+
+  T operator++(int) { return add(1); }
+  T operator--(int) { return sub(1); }
+  T operator++() { return add(1) + 1; }
+  T operator--() { return sub(1) - 1; }
+  T operator+=(T n) { return add(n) + n; }
+  T operator-=(T n) { return sub(n) - n; }
+
+  operator T() const { return m_counter.load(); }
+
+  T operator=(T n) {
+    store(n);
+    return n;
+  }
+};
+
 #endif /* MY_ATOMIC_INCLUDED */

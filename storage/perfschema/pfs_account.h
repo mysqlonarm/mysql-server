@@ -30,7 +30,7 @@
 */
 
 #include <sys/types.h>
-#include <atomic>
+#include "my_atomic.h"
 
 #include "lf.h"
 #include "my_hostname.h" /* HOSTNAME_LENGTH */
@@ -128,7 +128,7 @@ struct PFS_ALIGNED PFS_account : PFS_connection_slice {
   ulonglong m_disconnected_count;
 
  private:
-  std::atomic<int> m_refcount;
+  atomic_counter_t<int> m_refcount;
 
   /**
     Per account memory aggregated statistics.

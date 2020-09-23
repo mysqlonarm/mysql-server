@@ -26,9 +26,9 @@
 #include <mysql/components/services/pfs_plugin_table_service.h>
 #include <stddef.h>
 #include <sys/types.h>
-#include <atomic>
 #include <vector>
 
+#include "my_atomic.h"
 #include "my_base.h"
 #include "my_compiler.h"
 #include "my_dbug.h"
@@ -397,7 +397,7 @@ struct PFS_engine_table_share {
   /* Interface to be implemented by plugin who adds its own table in PFS. */
   PFS_engine_table_proxy m_st_table;
   /* Number of table objects using this share currently. */
-  std::atomic<int> m_ref_count;
+  atomic_counter_t<int> m_ref_count;
   /* is marked to be deleted? */
   bool m_in_purgatory;
 };

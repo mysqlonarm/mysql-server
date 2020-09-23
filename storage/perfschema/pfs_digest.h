@@ -29,7 +29,7 @@
 */
 
 #include <sys/types.h>
-#include <atomic>
+#include "my_atomic.h"
 
 #include "lf.h"
 #include "my_inttypes.h"
@@ -79,9 +79,9 @@ struct PFS_ALIGNED PFS_statements_digest_stat {
   /** Query sample seen timestamp.*/
   ulonglong m_query_sample_seen;
   /** Query sample timer wait.*/
-  std::atomic<std::uint64_t> m_query_sample_timer_wait;
+  atomic_counter_t<std::uint64_t> m_query_sample_timer_wait;
   /** Query sample reference count. */
-  std::atomic<std::uint32_t> m_query_sample_refs;
+  atomic_counter_t<std::uint32_t> m_query_sample_refs;
 
   /** First and last seen timestamps.*/
   ulonglong m_first_seen;

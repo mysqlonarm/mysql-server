@@ -23,7 +23,7 @@
 #ifndef PFS_HISTOGRAM_H
 #define PFS_HISTOGRAM_H
 
-#include <atomic>
+#include "my_atomic.h"
 #include "my_compiler.h"
 #include "my_inttypes.h"
 
@@ -43,7 +43,7 @@ struct PFS_histogram {
   ulonglong read_bucket(uint bucket_index) { return m_bucket[bucket_index]; }
 
  private:
-  std::atomic<ulonglong> m_bucket[NUMBER_OF_BUCKETS];
+  atomic_counter_t<ulonglong> m_bucket[NUMBER_OF_BUCKETS];
 };
 
 struct PFS_histogram_timers {
